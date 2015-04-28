@@ -1,0 +1,1 @@
+#define LEARN_GATE_CODE_TRIES  (3)

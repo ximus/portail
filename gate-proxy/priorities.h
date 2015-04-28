@@ -1,0 +1,7 @@
+#ifndef PRIORITIES_H
+#define PRIORITIES_H
+
+#define VELOCITY_PRIORITY   (PRIORITY_MAIN + 2)
+#define TELEMETRY_PRIORITY  (PRIORITY_MAIN + 1)
+
+#endif
