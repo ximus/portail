@@ -1,18 +1,7 @@
 /**
- * Character device messaging loop.
- *
- * Copyright (C) 2013, INRIA.
- *
- * This file is subject to the terms and conditions of the GNU Lesser
- * General Public License v2.1. See the file LICENSE in the top level
- * directory for more details.
- *
- * @ingroup chardev
- * @{
- * @file    chardev_thread.c
- * @brief   Runs an infinite loop in a separate thread to handle access to character devices such as uart.
- * @author  Kaspar Schleiser <kaspar@schleiser.de>
- * @}
+ * Why the posix interface?
+ * No particular reason. If it's little effort, might as well
+ * provide a more standard interface.
  */
 
 #include <stdio.h>
@@ -20,11 +9,9 @@
 
 #include "kernel.h"
 #include "irq.h"
-
 #include "thread.h"
 #include "msg.h"
 
-#include "gpioint.h"
 #include "uart_block.h"
 
 #include "xport.h"
@@ -34,200 +21,238 @@
 #define ENABLE_DEBUG    (0)
 #include "debug.h"
 
- // #define RELAY_STACK_SIZE      (KERNEL_CONF_STACKSIZE_DEFAULT)
- // #define RCV_BUFFER_SIZE       (64)
 
- // static char stack_buffer[RELAY_STACK_SIZE];
- // static msg_t msg_q[RCV_BUFFER_SIZE];
+#define RX_BUF_LEN        (2)
+#define FRAME_DELIMITER   (0x00)
+#define COBS_MAX_OVERHEAD (1) // bytes
+#define DATA_MAX_SIZE     (CC1100_MAX_DATA_LENGTH + COBS_MAX_OVERHEAD)
 
+volatile kernel_pid_t xport_pid = KERNEL_PID_UNDEF;
 
-// #define DTR_PORT       (2)
-// #define DTR_PORT_NUM   BIT3
-// inline uint16_t DTR_get(void) { return P2IN & DTR_PORT_NUM; }
+/* thread stack */
+static char stack_buffer[KERNEL_CONF_STACKSIZE_DEFAULT];
 
-volatile kernel_pid_t xport_pid  = KERNEL_PID_UNDEF;
-static kernel_pid_t   reader_pid = KERNEL_PID_UNDEF;
+typedef struct {
+  uint8_t  len;
+  uint8_t  data[DATA_MAX_SIZE];
+  uint16_t crc;
+} packet_t;
 
+struct {
+    enum {
+        DELIMIT,    /* frame delimiter */
+        LENGTH,     /* data length */
+        DATA,       /* variable length, cobs encoded */
+        CRC_H,      /* 16 bit CRC high byte */
+        CRC_L,      /* 16 bit CRC low byte */
+        COMPLETE
+    } state;
+    /**
+     * put simply a queue of length 1 pointing to the last
+     * packet received
+     */
+    packet_t *rdy_pkt;
+} parser;
 
-static xport_packet_t rcv_buffer[XPORT_RCV_BUFSIZE];
-static uint8_t        rcv_buffer_pos = 0;
+static struct {
+    kernel_pid_t pid = KERNEL_PID_UNDEF;
+    posix_iop_t *iop;
+} reader;
 
-static int init_DTR_port(void);
+static struct {
+    kernel_pid_t pid = KERNEL_PID_UNDEF;
+    posix_iop_t *iop;
+} writer;
+
+static packet_t rx_buffer[RX_BUF_LEN];
+static uint8_t  rx_buffer_pos = 0;
+
+/* holds just one packet */
+static uint8_t tx_buffer[sizeof(packet_t)];
+
 
 void xport_init(void) {
-    // xport_pid = thread_create(
-    //                   stack_buffer,
-    //                   sizeof(stack_buffer),
-    //                   PRIORITY_MAIN - 2,
-    //                   CREATE_STACKTEST,
-    //                   device_loop,
-    //                   NULL,
-    //                   "xport");
-    init_DTR_port();
-}
-
-// static void DTR_handler(void);
-
-static void frame_start_handler(void);
-static void frame_end_handler(void);
-
-static int init_DTR_port(void)
-{
-    gpioint_set(
-        1,
-        BIT2,
-        GPIOINT_RISING_EDGE,
-        frame_start_handler
+    uart_init();
+    reset_parser();
+    // uart set byte rx callback
+    xport_pid = thread_create(
+      stack_buffer,
+      sizeof(stack_buffer),
+      PRIORITY_MAIN - 2,
+      CREATE_STACKTEST | CREATE_SLEEPING,
+      thread_loop,
+      NULL,
+      "xport"
     );
-    gpioint_set(
-        1,
-        BIT3,
-        GPIOINT_FALLING_EDGE,
-        frame_end_handler
-    );
-
-    return 0;
 }
 
-static void frame_start_handler(void)
+static void reset_parser(void)
 {
-    P3OUT |= BIT7;
-    uart_block_receive(rcv_buffer[rcv_buffer_pos].data, XPORT_MAX_PACKET_SIZE, NULL);
+    parser.state = DELIMIT;
 }
 
-static inline void try_notify_reader(void);
-
-static void frame_end_handler(void)
+static void handle_incoming_byte(uint8_t byte)
 {
-    P3OUT &= ~BIT7;
-    int state = disableIRQ();
-    uint8_t received_count = uart_block_received_count();
-    uart_block_receive_end();
-    restoreIRQ(state);
+    packet_t *pkt = &rx_buffer[rx_buffer_pos];
 
-    rcv_buffer[rcv_buffer_pos].length = received_count;
-
-    try_notify_reader();
-
-    if (++rcv_buffer_pos == XPORT_RCV_BUFSIZE)
-    {
-        rcv_buffer_pos = 0;
+    switch (parser.state) {
+        case DELIMIT:
+            if (byte == FRAME_DELIMITER)
+            {
+                parser.state = LENGTH;
+            }
+            break;
+        case LENGTH:
+            if (byte <= DATA_MAX_SIZE)
+            {
+                pkt->len = byte;
+                parser.state = DATA;
+                uart_block_receive(pkt->data, pkt->len, on_data_complete);
+            }
+            else {
+                reset_parser();
+            }
+            break;
+        case DATA:
+            // never reaches here, data transfers via DMA
+            break;
+        case CRC_H:
+            pkt->crc |= byte << 8;
+            parser.state = CRC_H;
+            break;
+        case CRC_L:
+            pkt->crc |= byte;
+            parser.state = COMPLETE;
+            // cheat, no break, go straight to complete
+        case COMPLETE:
+            parser.rdy_pkt = pkt;
+            rx_buffer_pos++;
+            rx_buffer_pos %= sizeof(rx_buffer);
+            msg_send_int(xport_pid);
+            break;
     }
 }
 
-static inline void try_notify_reader(void)
+static void on_data_complete(void)
 {
-    if (reader_pid != KERNEL_PID_UNDEF)
+    parser.state = CRC_H;
+}
+
+static void on_packet_dropped(void)
+{
+    /**
+     * it would be nice to blink a red led or something
+     * or maybe keep stats and send them over network
+     * when a special request comes in
+     */
+}
+
+static void on_send_complete(void)
+{
+    if (writer.iop != NULL)
     {
         static msg_t m;
-        m.type        = PKT_PENDING;
-        m.content.ptr = (char *) &rcv_buffer[rcv_buffer_pos];
-        msg_send_int(&m, reader_pid);
+
+        m.sender_pid = writer.pid;
+        m.type = WRITE;
+        m.content.value = (char *) writer.iop;
+
+        msg_reply_int(&m, &m);
     }
 }
 
-
-// static void DTR_handler(void)
-// {
-//     if (DTR_get())
-//     {
-//         frame_start_handler();
-//     }
-//     else {
-//         frame_end_handler();
-//     }
-// }
-
-void xport_register(kernel_pid_t pid)
+uint8_t make_pkt(uint8_t *data, size_t len, uint8_t *dest)
 {
-    reader_pid = pid;
+    if (len + COBS_MAX_OVERHEAD > DATA_MAX_SIZE)
+    {
+        return 0;
+    }
+    /* first need to crc and encode the msg */
+    uint16_t crc = crc16(data, len);
+    /* encoded msg is written directly to its dest offset */
+    uint8_t enc_msg_len = cobs_encode(data, len, &dest[2]);
+
+    int write_offset = 0;
+
+    /* packet starts with a marker */
+    dest[write_offset++] = PKT_DELIMITER;
+
+    /* next is the 1 byte length of data */
+    dest[write_offset++] = enc_msg_len;
+
+    /* next is the encoded data, already written */
+    write_offset += enc_msg_len;
+
+    /* last is the 2 byte crc */
+    dest[write_offset++] = (crc >> 8) & 0xFF;
+    dest[write_offset++] = crc & 0xFF;
+
+    return write_offset;
 }
 
+static void thread_loop(void *arg)
+{
+    (void) arg;
+    msg_t m;
 
-// void *chardev_thread_entry(void *rb_)
-// {
-//     ringbuffer_t *rb = rb_;
-//     chardev_loop(rb);
-//     return NULL;
-// }
+    reader.pid = KERNEL_PID_UNDEF;
+    reader.iop = NULL;
+    struct posix_iop_t *iop = NULL;
 
-// // could be abstracted in to general block device, the likes of chardev
-// // not sure how useful it would be
-// static void device_loop(ringbuffer_t *rb)
-// {
-//     msg_t m;
+    while (1)
+    {
+        msg_receive(&m);
 
-//     kernel_pid_t pid = thread_getpid();
+        /* sent by another thread? as opposed to an internal interrupt */
+        if (!msg_sent_by_int(&m))
+        {
+            switch(m.type) {
+                case OPEN:
+                    // don't check read ownership, this app is small enough
+                    reader.pid = msg.sender_pid;
+                    reader.iop = (struct posix_iop_t *) msg.content.ptr;
+                    break;
+                case WRITE:
+                    iop = (struct posix_iop_t *) msg.content.ptr;
+                    uint8_t pkt_len = make_pkt(
+                        iop->buffer, iop->nbytes, tx_buffer
+                    );
+                    if (pkt_len > 0) {
+                        uart_dma_send(tx_buffer, pkt_len, on_send_complete);
+                    }
+                    else {
+                        on_packet_dropped();
+                    }
+                    break;
+            }
+        }
 
-//     // ringbuffer_init(&xport_ringbuffer, buffer, XPORT_BUFSIZE);
+        /* is data available and do we have reader waiting? */
+        if (parser.rdy_pkt != NULL && reader.iop != NULL)
+        {
+            unsigned    state = disableIRQ();
+            packet_t    *pkt  = parser.rdy_pkt;
+            posix_iop_t *r    = reader.iop;
 
-//     kernel_pid_t reader_pid = KERNEL_PID_UNDEF;
-//     struct posix_iop_t *r = NULL;
+            uint8_t  len = cobs_decode(pkt->data, pkt->len, r->buffer, r->nbytes);
+            uint16_t crc = crc16(r->buffer, len);
 
-//     puts("XPort thread started.");
+            if (crc == pkt->crc)
+            {
+                m.sender_pid = reader.pid;
+                m.type = READ;
+                m.content.value = (char *) r;
 
-//     while (1) {
-//         msg_receive(&m);
+                msg_reply(&m, &m);
 
-//         if (m.sender_pid != pid) {
-//             DEBUG("Receiving message from another thread: ");
+                reader.iop = NULL;
+            }
+            else {
+                on_packet_dropped();
+            }
 
-//             switch(m.type) {
-//                 case PACKET_RECEIVED:
-//                     // here
-//                     break;
-//                 case OPEN:
-//                     DEBUG("OPEN\n");
-//                     if (reader_pid == KERNEL_PID_UNDEF) {
-//                         reader_pid = m.sender_pid;
-//                         /* no error */
-//                         m.content.value = 0;
-//                     }
-//                     else {
-//                         m.content.value = -EBUSY;
-//                     }
-
-//                     msg_reply(&m, &m);
-//                     break;
-
-//                 case CLOSE:
-//                     DEBUG("CLOSE\n");
-//                     if (m.sender_pid == reader_pid) {
-//                         DEBUG("xport_thread: closing file from %" PRIkernel_pid "\n", reader_pid);
-//                         reader_pid = KERNEL_PID_UNDEF;
-//                         r = NULL;
-//                         m.content.value = 0;
-//                     }
-//                     else {
-//                         m.content.value = -EINVAL;
-//                     }
-
-//                     msg_reply(&m, &m);
-//                     break;
-
-//                 default:
-//                     DEBUG("UNKNOWN\n");
-//                     m.content.value = -EINVAL;
-//                     msg_reply(&m, &m);
-//             }
-//         }
-
-//         if (num_bytes_received > 0 && (r != NULL)) {
-//             DEBUG("Data is available\n");
-//             int state = disableIRQ();
-//             int nbytes = num_bytes_received;
-//             DEBUG("xport_thread [%i]: sending %i bytes received from %" PRIkernel_pid " to pid %" PRIkernel_pid "\n", pid, nbytes, m.sender_pid, reader_pid);
-//             ringbuffer_get(rb, r->buffer, nbytes);
-//             r->nbytes = nbytes;
-
-//             m.sender_pid = reader_pid;
-//             m.type = OPEN;
-//             m.content.ptr = (char *)r;
-
-//             msg_reply(&m, &m);
-
-//             r = NULL;
-//             restoreIRQ(state);
-//         }
-//     }
-// }
+            parser.rdy_pkt = NULL;
+            restoreIRQ(state);
+        }
+    }
+}
