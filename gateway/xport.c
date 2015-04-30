@@ -197,7 +197,11 @@ static void thread_loop(void *arg)
 
     reader.pid = KERNEL_PID_UNDEF;
     reader.iop = NULL;
+    writer.pid = KERNEL_PID_UNDEF;
+    writer.iop = NULL;
+
     struct posix_iop_t *iop = NULL;
+    packet_t *pkt = NULL;
 
     while (1)
     {
@@ -214,6 +218,8 @@ static void thread_loop(void *arg)
                     break;
                 case WRITE:
                     iop = (struct posix_iop_t *) msg.content.ptr;
+                    writer.pid = msg.sender_pid;
+                    writer.iop = iop;
                     uint8_t pkt_len = make_pkt(
                         iop->buffer, iop->nbytes, tx_buffer
                     );
@@ -230,9 +236,9 @@ static void thread_loop(void *arg)
         /* is data available and do we have reader waiting? */
         if (parser.rdy_pkt != NULL && reader.iop != NULL)
         {
-            unsigned    state = disableIRQ();
-            packet_t    *pkt  = parser.rdy_pkt;
-            posix_iop_t *r    = reader.iop;
+            unsigned state = disableIRQ();
+            pkt = parser.rdy_pkt;
+            iop = reader.iop;
 
             uint8_t  len = cobs_decode(pkt->data, pkt->len, r->buffer, r->nbytes);
             uint16_t crc = crc16(r->buffer, len);

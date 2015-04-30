@@ -51,22 +51,11 @@ void *relay_thread(void *arg)
 
     while (1)
     {
-        msg_receive(&m);
+        static uint8_t buffer[100];
+        int len;
 
-        __no_operation();
-
-        if (m.sender_pid == transceiver_pid)
-        {
-            // handle_tranceiver_msg(&m);
-        }
-        else if (m.type == XPORT_PKT_PENDING)
-        {
-            #if DEBUG
-            data_to_radio(m.content.ptr);
-            #else
-            data_to_xport(m.content.ptr);
-            #endif
-        }
+        len = posix_read(xport_pid, buffer, sizeof(buffer));
+        posix_write(xport_pid, buffer, len);
     }
 }
 
