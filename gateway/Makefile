@@ -15,7 +15,10 @@ export RIOTBASE ?= $(CURDIR)/../../RIOT
 # Uncomment this to enable scheduler statistics for ps:
 #CFLAGS += -DSCHEDSTATISTICS
 
-# CFLAGS += -ggdb3 -O0
+ASFLAGS += -gdwarf-2
+CFLAGS += -gdwarf-2
+
+LINKFLAGS += --gc-sections
 
 # If you want to use native with valgrind, you should recompile native
 # with the target all-valgrind instead of all:
@@ -29,16 +32,21 @@ CFLAGS += -DDEVELHELP
 # Change this to 0 show compiler invocation lines by default:
 export QUIET ?= 0
 
+# most of these aren't actually disabled as they are not in DEFAULT_MODULES
+DISABLE_MODULE += oneway_malloc
+DISABLE_MODULE += protocol_multiplex
+DISABLE_MODULE += net_help
+DISABLE_MODULE += auto_init
+
 # Modules to include:
 
-USEMODULE += shell
-USEMODULE += shell_commands
-USEMODULE += uart0
 USEMODULE += posix
-USEMODULE += cc110x_legacy
+# USEMODULE += cc110x_legacy
 # USEMODULE += auto_init
 
-export INCLUDES += -I../shared/pkg/cantcoap-749e223766/
+DIRS 			+= $(CURDIR)/../shared
+INCLUDES  += -I$(CURDIR)/../shared
+USEMODULE += shared
 
 # Specify custom dependencies for your application here ...
 # export APPDEPS = app_data.h config.h

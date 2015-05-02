@@ -15,9 +15,10 @@ CRC Result Reverse(1)           CRCRESR         Read only       Word    0006h   
                                 CRCRESR_L       Read/write      Byte    0006h   FFh
                                 CRCRESR_H       Read/write      Byte    0007h   FFh
 */
+#include "stdint.h"
 #include "msp430.h"
 
-static inline crc_ccitt_update(uint16_t *crc, uint8_t x)
+static inline void crc_ccitt_update(uint16_t *crc, uint8_t x)
 {
      uint16_t crc_new = (uint8_t)(*crc >> 8) | (*crc << 8);
      crc_new ^= x;

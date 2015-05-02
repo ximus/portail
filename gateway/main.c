@@ -2,7 +2,7 @@
 #include <msp430.h>
 
 #include "relay.h"
-#include "transceiver.h"
+// #include "transceiver.h"
 #include "xport.h"
 
 // TODO: code analysis: https://github.com/terryyin/lizard
@@ -20,11 +20,9 @@ int main(void)
   P3OUT &= ~BIT7;
   P3DIR |= BIT7;
 
-  gpioint_init();
-  uart_init();
   xport_init();
-  transceiver_init(TRANSCEIVER_DEFAULT);
-  transceiver_start();
+  // transceiver_init(TRANSCEIVER_DEFAULT);
+  // transceiver_start();
 
   relay_start();
 

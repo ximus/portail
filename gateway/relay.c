@@ -2,6 +2,7 @@
 #include <transceiver.h>
 #include "xport.h"
 #include "relay.h"
+#include "posix_io.h"
 
 // TODO: check priorities
 
@@ -34,24 +35,20 @@ void relay_start(void)
       "relay"
     );
 
-    transceiver_register(TRANSCEIVER_DEFAULT, relay_pid);
-    xport_register(relay_pid);
+    // transceiver_register(TRANSCEIVER_DEFAULT, relay_pid);
 }
-
-// forward declaration
-static void handle_xport_packet(xport_packet_t*);
 
 void *relay_thread(void *arg)
 {
     (void) arg;
 
-    msg_t m;
+    // msg_t m;
 
     msg_init_queue(msg_q, RCV_BUFFER_SIZE);
 
     while (1)
     {
-        static uint8_t buffer[100];
+        static char buffer[100];
         int len;
 
         len = posix_read(xport_pid, buffer, sizeof(buffer));
@@ -89,21 +86,16 @@ void *relay_thread(void *arg)
  * requires a destination memory block, relay.c set that to be the final
  * radio packet rather than an extra intermidary block).
  */
-static void data_to_radio(uint8_t *data, len)
-{
-    msg_t m;
-    radio_packet_t radio_packet;
+// static void data_to_radio(uint8_t *data, uint8_t len)
+// {
+//     msg_t m;
+//     radio_packet_t radio_packet;
 
-    radio_packet.length = xport_packet->length;
-    radio_packet.data   = xport_packet->data;
+//     radio_packet.length = xport_packet->length;
+//     radio_packet.data   = xport_packet->data;
 
-    m.type = SND_PKT;
-    m.content.ptr = (char *) &radio_packet;
+//     m.type = SND_PKT;
+//     m.content.ptr = (char *) &radio_packet;
 
-    msg_send_receive(&m, &m, radio_pid);
-}
-
-static void echo_xport_packet(xport_packet_t *pkt)
-{
-
-}
+//     msg_send_receive(&m, &m, radio_pid);
+// }

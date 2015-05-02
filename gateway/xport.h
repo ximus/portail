@@ -13,4 +13,3 @@
 extern volatile kernel_pid_t xport_pid;
 
 void xport_init(void);
-void xport_register(kernel_pid_t);
