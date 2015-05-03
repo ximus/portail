@@ -252,8 +252,7 @@ static void *thread_loop(void *arg)
             pkt = parser.rdy_pkt;
             iop = reader.iop;
 
-            uint8_t  len = cobs_decode(
-                pkt->data, pkt->len, (uint8_t *) iop->buffer, iop->nbytes);
+            uint8_t  len = cobs_decode(pkt->data, pkt->len, (uint8_t *) iop->buffer);
             uint16_t crc = crc16((uint8_t *) iop->buffer, len);
 
             if (crc == pkt->crc)
