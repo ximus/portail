@@ -1,5 +1,2 @@
-.mspdebug
 .gdb_history
-.gdbinit
-
 bin/
