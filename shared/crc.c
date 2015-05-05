@@ -18,38 +18,17 @@ CRC Result Reverse(1)           CRCRESR         Read only       Word    0006h   
 #include "stdint.h"
 #include "msp430.h"
 
-static inline void crc_ccitt_update(uint16_t *crc, uint8_t x)
-{
-     uint16_t crc_new = (uint8_t)(*crc >> 8) | (*crc << 8);
-     crc_new ^= x;
-     crc_new ^= (uint8_t)(crc_new & 0xff) >> 4;
-     crc_new ^= crc_new << 12;
-     crc_new ^= (crc_new & 0xff) << 5;
-     *crc = crc_new;
-}
-
-uint16_t crc_calculate_sw(uint8_t* data, uint8_t length)
-{
-  uint16_t crc = 0xffff;
-  uint8_t i = 0;
-
-  for(; i<length; i++)
-  {
-    crc_ccitt_update(&crc, data[i]);
-  }
-  return crc;
-}
-
-uint16_t crc_calculate_hw(uint8_t* data, uint8_t length)
+// msp430 CRC module uses CRC-CCITT-BR (bit reversed)
+// however some variants included registers with the bits reversed
+// CRCDIRB vs CRCDI
+// shout out to http://e2e.ti.com/support/microcontrollers/msp430/f/166/t/323420
+uint16_t crc16(uint8_t* data, uint8_t length)
 {
   CRCINIRES = 0xFFFF;
   uint8_t i = 0;
   for(; i<length; i++)
   {
-    CRCDI_L = data[i];
-    //CRCDIRB_L = data[i];
+    CRCDIRB_L = data[i];
   }
-  uint16_t crc = CRCINIRES;
-  uint16_t crcMSB = (crc << 8) | (crc >> 8);
-  return crcMSB;
+  return CRCINIRES;
 }
