@@ -258,6 +258,8 @@ static void *thread_loop(void *arg)
 
             if (crc == pkt->crc)
             {
+                iop->nbytes = len;
+
                 m.sender_pid = reader.pid;
                 m.type = READ;
                 m.content.ptr = (char *) iop;
