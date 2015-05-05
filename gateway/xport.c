@@ -219,11 +219,12 @@ static void *thread_loop(void *arg)
     {
         msg_receive(&m);
 
-        /* sent by another thread? as opposed to an internal interrupt */
+        /* sent by another thread (posix client)? */
+        /* as opposed to an internal (uart, dma) interrupt */
         if (!msg_sent_by_int(&m))
         {
             switch(m.type) {
-                case OPEN:
+                case READ:
                     // don't check read ownership, this app is small enough
                     reader.pid = m.sender_pid;
                     reader.iop = (struct posix_iop_t *) m.content.ptr;
