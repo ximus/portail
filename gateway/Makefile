@@ -7,6 +7,8 @@ export BOARD ?= wizzimote
 # This has to be the absolute path to the RIOT base directory:
 export RIOTBASE ?= $(CURDIR)/../../RIOT
 
+export USE_MSPGCC = 1
+
 # Uncomment these lines if you want to use platform support from external
 # repositories:
 #export RIOTCPU ?= $(CURDIR)/../../RIOT/thirdparty_cpu
@@ -17,8 +19,6 @@ export RIOTBASE ?= $(CURDIR)/../../RIOT
 
 ASFLAGS += -gdwarf-2
 CFLAGS += -gdwarf-2
-
-LINKFLAGS += --gc-sections
 
 # If you want to use native with valgrind, you should recompile native
 # with the target all-valgrind instead of all:

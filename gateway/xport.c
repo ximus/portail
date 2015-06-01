@@ -33,7 +33,7 @@
 volatile kernel_pid_t xport_pid = KERNEL_PID_UNDEF;
 
 /* thread stack */
-static char stack_buffer[KERNEL_CONF_STACKSIZE_DEFAULT];
+static char stack_buffer[THREAD_STACKSIZE_DEFAULT];
 
 typedef struct {
   uint8_t  len;
@@ -202,7 +202,7 @@ uint8_t make_pkt(uint8_t *data, size_t len, uint8_t *dest)
     return write_offset;
 }
 
-static void *thread_loop(void *arg)
+static void *xport_thread(void *arg)
 {
     (void) arg;
     msg_t m;
@@ -281,14 +281,14 @@ static void *thread_loop(void *arg)
 }
 
 void xport_init(void) {
-    uart_init(handle_incoming_byte);
+    uart_on_char_receive(handle_incoming_byte);
     reset_parser();
     xport_pid = thread_create(
       stack_buffer,
       sizeof(stack_buffer),
-      PRIORITY_MAIN - 2,
+      THREAD_PRIORITY_MAIN - 2,
       0,
-      thread_loop,
+      xport_thread,
       NULL,
       "xport"
     );

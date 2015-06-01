@@ -18,6 +18,12 @@ CRC Result Reverse(1)           CRCRESR         Read only       Word    0006h   
 #include "stdint.h"
 #include "msp430.h"
 
+/* This got removed from cpu header, but seems to work anyways? needs investigation*/
+#define CRCDIRB_              0x0152    /* CRC data in reverse byte Register */
+sfrb(CRCDIRB_L , CRCDIRB_);
+sfrb(CRCDIRB_H , CRCDIRB_+1);
+sfrw(CRCDIRB, CRCDIRB_);
+
 // msp430 CRC module uses CRC-CCITT-BR (bit reversed)
 // however some variants included registers with the bits reversed
 // CRCDIRB vs CRCDI

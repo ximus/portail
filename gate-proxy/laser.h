@@ -1,7 +1,7 @@
 #ifndef LASER_H
 #define LASER_H
 
-#include "intrinsics.h"
+#include "in430.h"
 
 typedef enum {
     LASER_OFF,

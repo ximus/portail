@@ -8,7 +8,7 @@
 
 #define DEBUG 1
 
-#define RELAY_STACK_SIZE      (KERNEL_CONF_STACKSIZE_DEFAULT)
+#define RELAY_STACK_SIZE      (THREAD_STACKSIZE_DEFAULT)
 #define RCV_BUFFER_SIZE       (64)
 
 static char stack_buffer[RELAY_STACK_SIZE];
@@ -28,7 +28,7 @@ void relay_start(void)
     relay_pid = thread_create(
       stack_buffer,
       sizeof(stack_buffer),
-      PRIORITY_MAIN - 2,
+      THREAD_PRIORITY_MAIN - 2,
       CREATE_STACKTEST,
       relay_thread,
       NULL,

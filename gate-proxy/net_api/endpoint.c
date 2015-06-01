@@ -19,7 +19,7 @@ coap_rw_buffer_t scratch_buf = {scratch_buf_buf, SCRATCH_BUF_LEN};
 #include "endpoints.c"
 
 #define MSG_BUFFER_SIZE        (32)
-#define ENDPOINT_STACK_SIZE    (KERNEL_CONF_STACKSIZE_DEFAULT)
+#define ENDPOINT_STACK_SIZE    (THREAD_STACKSIZE_DEFAULT)
 
 static char  stack_buffer[ENDPOINT_STACK_SIZE];
 static msg_t msg_q[MSG_BUFFER_SIZE];
@@ -121,7 +121,7 @@ void api_endpoint_start(void)
     api_endpoint_pid = thread_create(
         stack_buffer,
         sizeof(stack_buffer),
-        PRIORITY_MAIN - 2,
+        THREAD_PRIORITY_MAIN - 2,
         CREATE_STACKTEST,
         api_endpoint,
         NULL,

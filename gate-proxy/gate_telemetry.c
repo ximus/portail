@@ -13,10 +13,9 @@
 #include "debug.h"
 
 
+#define VELOCITY_STACKSIZE  (THREAD_STACKSIZE_DEFAULT)
+#define TELEMETRY_STACKSIZE (THREAD_STACKSIZE_DEFAULT)
 
-#define VELOCITY_STACKSIZE  (KERNEL_CONF_STACKSIZE_DEFAULT)
-#define TELEMETRY_STACKSIZE (KERNEL_CONF_STACKSIZE_DEFAULT)
-// #define TELEMETRY_STACKSIZE (KERNEL_CONF_STACKSIZE_MAIN)
 static char velocity_stack_buffer[VELOCITY_STACKSIZE];
 static char stack_buffer[TELEMETRY_STACKSIZE];
 kernel_pid_t telemetry_pid = KERNEL_PID_UNDEF;
@@ -305,7 +304,6 @@ char *gate_state_to_s(gate_state_t state)
 // OPTIMIZE: could do away with this and use a "best guess" wait time instead
 int gate_wait_until_position(uint8_t target_percent)
 {
-    uint16_t position;
     uint16_t velocity;
     uint8_t  current_percent;
     do

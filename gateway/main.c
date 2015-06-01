@@ -8,6 +8,8 @@
 // TODO: code analysis: https://github.com/terryyin/lizard
 // http://www.maultech.com/chrislott/resources/cmetrics/
 
+// TODO: add message signing or encryption to requests
+
 int main(void)
 {
   // init green led
@@ -20,6 +22,7 @@ int main(void)
   P3OUT &= ~BIT7;
   P3DIR |= BIT7;
 
+  uart_init();
   xport_init();
   // transceiver_init(TRANSCEIVER_DEFAULT);
   // transceiver_start();

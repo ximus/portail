@@ -1,8 +1,10 @@
 #include <string.h>
 #include "coap.h"
 
-const uint16_t rsplen = 1500;
-static char rsp[1500] = "";
+// TODO(max): this needs a thought, I lowered from 1500
+// to get the .bss down
+const uint16_t rsplen = 30;
+static char rsp[30] = "";
 
 const coap_endpoint_path_t path_well_known_core = {2, {".well-known", "core"}};
 
