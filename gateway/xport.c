@@ -81,7 +81,6 @@ static void reset_parser(void)
 static void on_data_complete(void)
 {
     parser.state = CRC_H;
-    P3OUT |= BIT6;
 }
 
 static void on_packet_dropped(void)
@@ -137,7 +136,6 @@ static void handle_incoming_byte(uint8_t byte)
         case DELIMIT:
             if (byte == FRAME_DELIMITER)
             {
-                P1OUT |= BIT7;
                 parser.state = LENGTH;
             }
             break;
@@ -146,7 +144,6 @@ static void handle_incoming_byte(uint8_t byte)
             {
                 pkt->len = byte;
                 parser.state = DATA;
-                P3OUT |= BIT7;
                 uart_block_receive(pkt->data, pkt->len, on_data_complete);
             }
             else {
