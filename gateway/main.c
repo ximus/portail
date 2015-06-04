@@ -25,10 +25,6 @@ int main(void)
   P3OUT &= ~BIT7;
   P3DIR |= BIT7;
 
-  xport_init();
-  // transceiver_init(TRANSCEIVER_DEFAULT);
-  // transceiver_start();
-
   relay_start();
 
   return 0;
