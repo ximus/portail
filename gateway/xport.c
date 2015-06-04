@@ -17,6 +17,7 @@
 #include "crc.h"
 #include "cobs.h"
 
+#include "portail.h"
 #include "xport.h"
 
 
@@ -25,10 +26,10 @@
 #include "debug.h"
 
 
-#define RX_BUF_LEN        (2)
-#define FRAME_DELIMITER   (0x00)
-#define COBS_MAX_OVERHEAD (1) // bytes
-#define DATA_MAX_SIZE     (CC1100_MAX_DATA_LENGTH + COBS_MAX_OVERHEAD)
+#define RX_BUF_LEN         (2)
+#define FRAME_DELIMITER    (0x00)
+#define COBS_MAX_OVERHEAD  (1) // bytes
+#define UART_DATA_MAX_SIZE (PORTAIL_MAX_DATA_SIZE + COBS_MAX_OVERHEAD)
 
 volatile kernel_pid_t xport_pid = KERNEL_PID_UNDEF;
 
@@ -37,7 +38,7 @@ static char stack_buffer[THREAD_STACKSIZE_DEFAULT];
 
 typedef struct {
   uint8_t  len;
-  uint8_t  data[DATA_MAX_SIZE];
+  uint8_t  data[UART_DATA_MAX_SIZE];
   uint16_t crc;
 } packet_t;
 
@@ -67,6 +68,14 @@ static struct {
     struct posix_iop_t *iop;
 } writer;
 
+static struct {
+    uint send_count;
+    uint bytes_received;
+    uint pkt_sent;
+    uint pkt_received;
+    uint pkt_dropped;
+} stats;
+
 static packet_t rx_buffer[RX_BUF_LEN];
 static uint8_t  rx_buffer_pos = 0;
 
@@ -85,6 +94,7 @@ static void on_data_complete(void)
 
 static void on_packet_dropped(void)
 {
+    stats.pkt_dropped += 1;
     /**
      * it would be nice to blink a red led or something
      * or maybe keep stats and send them over network
@@ -94,6 +104,7 @@ static void on_packet_dropped(void)
 
 static void on_send_complete(void)
 {
+    stats.pkt_sent += 1;
     if (writer.iop != NULL)
     {
         static msg_t m;
@@ -118,6 +129,7 @@ static void incr_rx_buffer(void)
 
 static void notify_packet_ready(void)
 {
+    stats.pkt_received += 1;
     static msg_t m;
     m.type = 0;
     msg_send_int(&m, xport_pid);
@@ -128,6 +140,7 @@ static uint8_t dbugi = 0;
 
 static void handle_incoming_byte(uint8_t byte)
 {
+    stats.bytes_rcvd += 1;
     packet_t *pkt = &rx_buffer[rx_buffer_pos];
 
     dbug[++dbugi] = byte;
@@ -140,7 +153,7 @@ static void handle_incoming_byte(uint8_t byte)
             }
             break;
         case LENGTH:
-            if (0 < byte && byte <= DATA_MAX_SIZE)
+            if (0 < byte && byte <= UART_DATA_MAX_SIZE)
             {
                 pkt->len = byte;
                 parser.state = DATA;
@@ -172,7 +185,7 @@ static void handle_incoming_byte(uint8_t byte)
 
 uint8_t make_pkt(uint8_t *data, size_t len, uint8_t *dest)
 {
-    if (len + COBS_MAX_OVERHEAD > DATA_MAX_SIZE)
+    if (len + COBS_MAX_OVERHEAD > UART_DATA_MAX_SIZE)
     {
         return 0;
     }
@@ -278,6 +291,7 @@ static void *xport_thread(void *arg)
 }
 
 void xport_init(void) {
+    uart_init();
     uart_on_char_receive(handle_incoming_byte);
     reset_parser();
     xport_pid = thread_create(

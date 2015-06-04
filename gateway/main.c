@@ -2,7 +2,7 @@
 #include <msp430.h>
 
 #include "relay.h"
-// #include "transceiver.h"
+#include "uart.h"
 #include "xport.h"
 
 // TODO: code analysis: https://github.com/terryyin/lizard
@@ -12,6 +12,9 @@
 
 int main(void)
 {
+  // P3OUT |= BIT6;
+  // P1OUT |= BIT7;
+  // P3OUT |= BIT7;
   // init green led
   P3OUT &= ~BIT6;
   P3DIR |= BIT6;
@@ -22,7 +25,6 @@ int main(void)
   P3OUT &= ~BIT7;
   P3DIR |= BIT7;
 
-  uart_init();
   xport_init();
   // transceiver_init(TRANSCEIVER_DEFAULT);
   // transceiver_start();

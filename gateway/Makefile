@@ -17,6 +17,9 @@ export USE_MSPGCC = 1
 # Uncomment this to enable scheduler statistics for ps:
 #CFLAGS += -DSCHEDSTATISTICS
 
+
+# CFLAGS += -DSCHED_TEST_STACK
+
 ASFLAGS += -gdwarf-2
 CFLAGS += -gdwarf-2
 
@@ -27,7 +30,7 @@ CFLAGS += -gdwarf-2
 # Uncomment this to enable code in RIOT that does safety checking
 # which is not needed in a production environment but helps in the
 # development process:
-CFLAGS += -DDEVELHELP
+# CFLAGS += -DDEVELHELP
 
 # Change this to 0 show compiler invocation lines by default:
 export QUIET ?= 0
