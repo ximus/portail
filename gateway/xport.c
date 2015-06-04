@@ -110,7 +110,7 @@ static void incr_rx_buffer(void)
 {
     rx_buffer_pos++;
     /* wrap around if end reached */
-    rx_buffer_pos %= sizeof(rx_buffer);
+    rx_buffer_pos %= RX_BUF_LEN;
     /* reset the next packet */
     rx_buffer[rx_buffer_pos].len = 0;
     rx_buffer[rx_buffer_pos].crc = 0;
