@@ -95,11 +95,6 @@ static void on_data_complete(void)
 static void on_packet_dropped(void)
 {
     stats.pkt_dropped += 1;
-    /**
-     * it would be nice to blink a red led or something
-     * or maybe keep stats and send them over network
-     * when a special request comes in
-     */
 }
 
 static void on_send_complete(void)
@@ -135,15 +130,10 @@ static void notify_packet_ready(void)
     msg_send_int(&m, xport_pid);
 }
 
-static uint8_t dbug[100];
-static uint8_t dbugi = 0;
-
 static void handle_incoming_byte(uint8_t byte)
 {
     stats.bytes_rcvd += 1;
     packet_t *pkt = &rx_buffer[rx_buffer_pos];
-
-    dbug[++dbugi] = byte;
 
     switch (parser.state) {
         case DELIMIT:
