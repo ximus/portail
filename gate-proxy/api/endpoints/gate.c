@@ -1,11 +1,11 @@
 #include "cbor.h"
-#include "cc110x_legacy.h"
+#include "portail.h"
 #include "gate_control.h"
 #include "gate_telemetry.h"
 
 const coap_endpoint_path_t path_gate = {1, {"gate"}};
 
-static uint8_t resp_buffer[CC1100_MAX_DATA_LENGTH];
+static uint8_t resp_buffer[PORTAIL_MAX_DATA_SIZE];
 cbor_stream_t cbor;
 
 
@@ -16,14 +16,14 @@ int handle_get_gate(
     uint8_t             id_hi,
     uint8_t             id_lo)
 {
-    uint16_t length = 0;
+    uint8_t length = 0;
     // cbor_clear(&cbor);
     cbor_init(&cbor, resp_buffer, sizeof(resp_buffer));
 
     length += cbor_serialize_map(&cbor, 2);
-    length += cbor_serialize_byte_string(&cbor, "pos");
+    length += cbor_serialize_byte_string(&cbor, "p");
     length += cbor_serialize_int(&cbor, 1234);
-    length += cbor_serialize_byte_string(&cbor, "mvt");
+    length += cbor_serialize_byte_string(&cbor, "s");
     length += cbor_serialize_byte_string(&cbor, "closing");
 
     return coap_make_response(

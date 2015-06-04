@@ -1,4 +1,5 @@
-#include "cc110x_legacy.h"
+#ifndef XPORT_H__
+#define XPORT_H__
 
 /**
  * While writing this module's api, I was quite new to writing c
@@ -13,3 +14,5 @@
 extern volatile kernel_pid_t xport_pid;
 
 void xport_init(void);
+
+#endif /* end of include guard: XPORT_H__ */

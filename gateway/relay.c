@@ -1,11 +1,11 @@
-#include <thread.h>
-#include <transceiver.h>
-#include "xport.h"
-#include "relay.h"
+#include "thread.h"
+#include "transceiver.h"
 #include "posix_io.h"
 
+#include "portail.h"
+#include "xport.h"
+#include "relay.h"
 
-#define RCV_BUFFER_SIZE       (64)
 
 static char uart_to_radio_stack[THREAD_STACKSIZE_DEFAULT];
 static char radio_to_uart_stack[THREAD_STACKSIZE_DEFAULT];
@@ -17,14 +17,13 @@ volatile kernel_pid_t radio_to_uart_pid = KERNEL_PID_UNDEF;
 
 static struct {
   uint radio_buffer_full;
+  uint radio_send_fail;
 } stats;
+
 
 void *uart_to_radio_thread(void*);
 void *radio_to_uart_thread(void*);
 
-
-// expects a transceiver initialized and started
-// expects xport initialized
 void relay_start(void)
 {
 
@@ -53,7 +52,7 @@ void relay_start(void)
       "radio_to_uart_thread"
     );
 
-    transceiver_register(TRANCSCEIVER, radio_to_uart_thread);
+    transceiver_register(TRANCSCEIVER, radio_to_uart_pid);
 }
 
 void *uart_to_radio_thread(void *arg)
@@ -65,7 +64,7 @@ void *uart_to_radio_thread(void *arg)
     transceiver_command_t tcmd;
     static char buffer[PORTAIL_MAX_DATA_SIZE];
 
-    radio_pkt.data = buffer;
+    radio_pkt.data = (uint8_t *) buffer;
 
     tcmd.transceivers = TRANCSCEIVER;
     tcmd.data = &radio_pkt;
@@ -77,14 +76,11 @@ void *uart_to_radio_thread(void *arg)
         m.content.ptr = (char *) &tcmd;
         msg_send_receive(&m, &m, transceiver_pid);
 
+        // cc110x_send() returns int8_t
         int8_t sent_len = (int8_t) m.content.value;
         if (sent_len == 0)
         {
-            stats.radio_sent_nothing += 1;
-        }
-        if (sent_len != radio_pkt.length)
-        {
-            /* code */
+            stats.radio_send_fail += 1;
         }
     }
 }
@@ -100,13 +96,13 @@ void *radio_to_uart_thread(void *arg)
     {
         msg_receive(&m);
 
-        if (m->type == PKT_PENDING)
+        if (m.type == PKT_PENDING)
         {
             p = (radio_packet_t *) m.content.ptr;
             posix_write(xport_pid, p->data, p->length);
             p->processing--;
         }
-        else if (m->type == ENOBUFFER)
+        else if (m.type == ENOBUFFER)
         {
             stats.radio_buffer_full += 1;
         }

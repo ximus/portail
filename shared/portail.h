@@ -7,6 +7,7 @@
 #define GATE_PROXY_RADIO_ADDR   (1)
 #define GATEWAY_RADIO_ADDR      (2)
 
+// basically the narrowest piece of the data pipeline
 #define PORTAIL_MAX_DATA_SIZE (CC1100_MAX_DATA_LENGTH)
 
 

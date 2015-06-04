@@ -44,8 +44,8 @@ DISABLE_MODULE += auto_init
 # Modules to include:
 
 USEMODULE += posix
-# USEMODULE += cc110x_legacy
-# USEMODULE += auto_init
+USEMODULE += cc110x_legacy
+USEMODULE += auto_init
 
 DIRS 			+= $(CURDIR)/../shared
 INCLUDES  += -I$(CURDIR)/../shared

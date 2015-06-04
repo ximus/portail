@@ -1,12 +1,3 @@
-/**
- * Why the posix interface?
- * No particular reason. If it's little effort, might as well
- * provide a more standard interface.
- */
-
-#include <stdio.h>
-#include <errno.h>
-
 #include "kernel.h"
 #include "irq.h"
 #include "thread.h"
@@ -21,7 +12,6 @@
 #include "xport.h"
 
 
-/* increase stack size in uart0 when setting this to 1 */
 #define ENABLE_DEBUG    (0)
 #include "debug.h"
 
@@ -70,7 +60,7 @@ static struct {
 
 static struct {
     uint send_count;
-    uint bytes_received;
+    uint bytes_received; // should maybe be uint32
     uint pkt_sent;
     uint pkt_received;
     uint pkt_dropped;
@@ -132,7 +122,7 @@ static void notify_packet_ready(void)
 
 static void handle_incoming_byte(uint8_t byte)
 {
-    stats.bytes_rcvd += 1;
+    stats.bytes_received += 1;
     packet_t *pkt = &rx_buffer[rx_buffer_pos];
 
     switch (parser.state) {

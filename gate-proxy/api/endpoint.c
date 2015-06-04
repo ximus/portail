@@ -3,10 +3,7 @@
 #include "thread.h"
 #include "transceiver.h"
 #include "coap.h"
-#include "circular_buffer.h"
 
-// #include "netdev/base.h"
-// #include "netdev/default.h"
 
 #define ENABLE_DEBUG (0)
 #include "debug.h"
@@ -26,13 +23,8 @@ static msg_t msg_q[MSG_BUFFER_SIZE];
 
 kernel_pid_t api_endpoint_pid = KERNEL_PID_UNDEF;
 
-// #define PKT_RCV_BUFFER_LEN  (256)
-// static uint8_t pkt_rvc_buffer[PKT_RCV_BUFFER_LEN]
-// static circ_buffer_t pkt_rcv_circ_buffer = CIRC_BUFFER_INIT(PKT_RCV_BUFFER_LEN);
-// static netdev_t *netdev;
 
-
-void *api_endpoint(void *arg)
+void *api_thread(void *arg)
 {
     (void) arg;
 
@@ -89,42 +81,18 @@ void *api_endpoint(void *arg)
         else if (m.type == ENOBUFFER) {
             DEBUG("Transceiver buffer full");
         }
-        else {
-            DEBUG("Unknown packet received");
-        }
     }
 }
 
-// int handle_net_packet(
-//     netdev_t *dev,
-//     void *src,
-//     size_t src_len,
-//     void *dest,
-//     size_t dest_len,
-//     void *payload,
-//     size_t payload_len)
-// {
-//     (void) dev;
-//     (void) dest;
-//     (void) dest_len;
-
-//     int index = circ_buffer_add(pkt_rcv_circ_buffer);
-//     // pkt_rvc_buffer[index];
-// }
-
-void api_endpoint_start(void)
+void api_start(void)
 {
-    // netdev = NETDEV_DEFAULT;
-
-    // netdev->driver->add_receive_data_callback();
-
     api_endpoint_pid = thread_create(
         stack_buffer,
         sizeof(stack_buffer),
         THREAD_PRIORITY_MAIN - 2,
         CREATE_STACKTEST,
-        api_endpoint,
+        api_thread,
         NULL,
-        "api_endpoint"
+        "api"
     );
 }
