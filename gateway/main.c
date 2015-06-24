@@ -1,31 +1,19 @@
-#include <stdio.h>
-#include <msp430.h>
-
 #include "relay.h"
 #include "uart.h"
+#include "transceiver.h"
 #include "xport.h"
 
 // TODO: code analysis: https://github.com/terryyin/lizard
 // http://www.maultech.com/chrislott/resources/cmetrics/
 
 // TODO: add message signing or encryption to requests
+// TODO: i could use one of the buttons to put the gateway
+// into echo mode to quickly run tests. It would be good
+// practice at dynamically shutting down/creating threads.
 
 int main(void)
 {
-  // P3OUT |= BIT6;
-  // P1OUT |= BIT7;
-  // P3OUT |= BIT7;
-  // init green led
-  P3OUT &= ~BIT6;
-  P3DIR |= BIT6;
-  // init red led
-  P1OUT &= ~BIT7;
-  P1DIR |= BIT7;
-  // init yellow led
-  P3OUT &= ~BIT7;
-  P3DIR |= BIT7;
+    relay_start();
 
-  relay_start();
-
-  return 0;
+    return 0;
 }

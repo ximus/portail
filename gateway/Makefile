@@ -18,7 +18,9 @@ export USE_MSPGCC = 1
 #CFLAGS += -DSCHEDSTATISTICS
 
 
-# CFLAGS += -DSCHED_TEST_STACK
+CFLAGS += -DSCHED_TEST_STACK
+# CFLAGS += -Dprintf=cprintf
+# CFLAGS += -DBUFFER_PUTCHAR
 
 ASFLAGS += -gdwarf-2
 CFLAGS += -gdwarf-2
@@ -30,21 +32,18 @@ CFLAGS += -gdwarf-2
 # Uncomment this to enable code in RIOT that does safety checking
 # which is not needed in a production environment but helps in the
 # development process:
-# CFLAGS += -DDEVELHELP
+CFLAGS += -DDEVELHELP
 
 # Change this to 0 show compiler invocation lines by default:
 export QUIET ?= 0
 
-# most of these aren't actually disabled as they are not in DEFAULT_MODULES
-DISABLE_MODULE += oneway_malloc
-DISABLE_MODULE += protocol_multiplex
-DISABLE_MODULE += net_help
-DISABLE_MODULE += auto_init
-
 # Modules to include:
+# DISABLE_MODULE += vtimer
 
 USEMODULE += posix
+USEMODULE += transceiver
 USEMODULE += cc110x_legacy
+USEMODULE += vtimer
 USEMODULE += auto_init
 
 DIRS 			+= $(CURDIR)/../shared

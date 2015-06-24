@@ -26,7 +26,7 @@ typedef struct {
 */
 static const state_element_t state_elements[] = {
     { &telemetry, sizeof(telemetry) },
-    // laser.value gets needlessly persisted
+    // laser.value gets needlessly persisted, ... and restored? should be fine
     { &laser,     sizeof(laser) }
 };
 

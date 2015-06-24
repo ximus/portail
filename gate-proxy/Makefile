@@ -43,7 +43,6 @@ export QUIET ?= 0
 DISABLE_MODULE += oneway_malloc
 DISABLE_MODULE += protocol_multiplex
 DISABLE_MODULE += net_help
-DISABLE_MODULE += auto_init
 
 # Modules to include:
 USEMODULE += shell
@@ -55,14 +54,15 @@ USEMODULE += vtimer
 USEMODULE += cc110x_legacy
 USEMODULE += cbor
 USEMODULE += transceiver
+USEMODULE += auto_init
 # USEMODULE += config
 
 # USEPKG += libcoap
 
 #export INCLUDES += -Iapplication_include
 
-DIRS 			+= net_api
-USEMODULE += net_api
+DIRS 			+= api
+USEMODULE += api
 
 DIRS 			+= $(CURDIR)/../shared
 INCLUDES  += -I$(CURDIR)/../shared

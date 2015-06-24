@@ -3,6 +3,15 @@
 #include "gate_control.h"
 #include "gate_telemetry.h"
 
+/* PUT request value */
+#define REQUEST_OPEN  (1)
+#define REQUEST_CLOSE (-1)
+
+/* response fields */
+#define STATE_FIELD    "f"
+#define ERROR_FIELD    "e"
+#define POSITION_FIELD "p"
+
 const coap_endpoint_path_t path_gate = {1, {"gate"}};
 
 static uint8_t resp_buffer[PORTAIL_MAX_DATA_SIZE];
@@ -21,10 +30,17 @@ int handle_get_gate(
     cbor_init(&cbor, resp_buffer, sizeof(resp_buffer));
 
     length += cbor_serialize_map(&cbor, 2);
-    length += cbor_serialize_byte_string(&cbor, "p");
-    length += cbor_serialize_int(&cbor, 1234);
-    length += cbor_serialize_byte_string(&cbor, "s");
-    length += cbor_serialize_byte_string(&cbor, "closing");
+
+    /* state */
+    length += cbor_serialize_byte_string(&cbor, STATE_FIELD);
+    length += cbor_serialize_int(&cbor, gate_get_state());
+
+    /* position */
+    uint16_t position;
+    if (gate_get_position(&position) == 0) {
+        length += cbor_serialize_byte_string(&cbor, POSITION_FIELD);
+        length += cbor_serialize_int(&cbor, position);
+    }
 
     return coap_make_response(
         scratch,
@@ -39,6 +55,7 @@ int handle_get_gate(
     );
 }
 
+// for reference:
 // int coap_make_response(coap_rw_buffer_t *scratch, coap_packet_t *pkt,
 //   const uint8_t *content, size_t content_len, uint8_t msgid_hi,
 //   uint8_t msgid_lo, const coap_buffer_t* tok, coap_responsecode_t rspcode,
@@ -64,9 +81,9 @@ int handle_put_gate(
     int8_t action = *inpkt->payload.p;
     int err;
 
-    if (action == 1) {
+    if (action == REQUEST_OPEN) {
         err = gate_open();
-    } else if (action == -1) {
+    } else if (action == REQUEST_CLOSE) {
         err = gate_close();
     } else {
         // respond with bad request
@@ -84,11 +101,11 @@ int handle_put_gate(
     cbor_init(&cbor, resp_buffer, sizeof(resp_buffer));
 
     length += cbor_serialize_map(&cbor, 2);
-    length += cbor_serialize_byte_string(&cbor, "st");
-    length += cbor_serialize_byte_string(&cbor, gate_state_to_s(gate_get_state()));
+    length += cbor_serialize_byte_string(&cbor, STATE_FIELD);
+    length += cbor_serialize_byte_string(&cbor, gate_get_state());
 
-    if (err < 0) {
-        length += cbor_serialize_byte_string(&cbor, "err");
+    if (err != 0) {
+        length += cbor_serialize_byte_string(&cbor, ERROR_FIELD);
         length += cbor_serialize_byte_string(&cbor, err * -1);
     }
 

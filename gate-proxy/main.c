@@ -2,7 +2,7 @@
 #include "gate_telemetry.h"
 #include "persistence.h"
 #include "laser.h"
-#include "net_api/endpoint.h"
+#include "api/api.h"
 
 // TODO: add radio transport security?
 // TODO: program a button to learn gate code
@@ -17,7 +17,7 @@ int main(void)
     // restore any existing persisted state
     restore_state();
 
-    api_endpoint_start();
+    api_start();
     app_shell_run();
     // TODO: set led if teaching needed
 

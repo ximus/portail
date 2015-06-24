@@ -12,7 +12,7 @@
 #include "xport.h"
 
 
-#define ENABLE_DEBUG    (0)
+#define ENABLE_DEBUG    (1)
 #include "debug.h"
 
 
@@ -24,7 +24,7 @@
 volatile kernel_pid_t xport_pid = KERNEL_PID_UNDEF;
 
 /* thread stack */
-static char stack_buffer[THREAD_STACKSIZE_DEFAULT];
+static char stack_buffer[THREAD_STACKSIZE_DEFAULT*2];
 
 typedef struct {
   uint8_t  len;
@@ -106,7 +106,8 @@ static void incr_rx_buffer(void)
 {
     rx_buffer_pos++;
     /* wrap around if end reached */
-    rx_buffer_pos %= RX_BUF_LEN;
+    if (rx_buffer_pos == RX_BUF_LEN)
+        rx_buffer_pos = 0;
     /* reset the next packet */
     rx_buffer[rx_buffer_pos].len = 0;
     rx_buffer[rx_buffer_pos].crc = 0;
@@ -129,6 +130,7 @@ static void handle_incoming_byte(uint8_t byte)
         case DELIMIT:
             if (byte == FRAME_DELIMITER)
             {
+                // TODO(max): maybe should clear rdy_pkt if == to pkt
                 parser.state = LENGTH;
             }
             break;
@@ -235,10 +237,15 @@ static void *xport_thread(void *arg)
                     break;
             }
         }
+        else {
+            DEBUG("xport: received interrupt notification\n");
+        }
 
         /* is data available and do we have reader waiting? */
         if (parser.rdy_pkt != NULL && reader.iop != NULL)
         {
+            DEBUG("xport: have packet and reader, processing ...\n");
+
             unsigned state = disableIRQ();
             pkt = parser.rdy_pkt;
             iop = reader.iop;
