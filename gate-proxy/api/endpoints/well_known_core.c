@@ -1,12 +1,8 @@
 #include <string.h>
 #include "coap.h"
 
-// TODO(max): this needs a thought, I lowered from 1500
-// to get the .bss down
-const uint16_t rsplen = 30;
-static char rsp[30] = "";
-
-const coap_endpoint_path_t path_well_known_core = {2, {".well-known", "core"}};
+#define RSP_LEN (60)
+static char rsp[RSP_LEN] = "";
 
 int handle_get_well_known_core(
     coap_rw_buffer_t    *scratch,
@@ -28,10 +24,15 @@ int handle_get_well_known_core(
     );
 }
 
-
+/**
+ * this method will overflow `rsp` if it isn't big engough
+ * TODO: rewite it so that it returns an error if it runs out of space
+ * TODO: any way to generate this string at compile time?
+ * @param ep list of endpoints
+ */
 void well_known_core_build(const coap_endpoint_t *ep)
 {
-    uint16_t len = rsplen;
+    uint16_t len = RSP_LEN;
     int i;
 
     len--; // Null-terminated string
