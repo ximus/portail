@@ -78,7 +78,6 @@ void *uart_to_radio_thread(void *arg)
     {
         DEBUG("uart_to_radio: waiting ...\n");
 
-        msg_receive(&m);
         int8_t len = posix_read(xport_pid, buffer, sizeof(buffer));
         radio_pkt.length = len;
 
@@ -111,6 +110,8 @@ void *radio_to_uart_thread(void *arg)
     {
         msg_receive(&m);
 
+        LED_YELLOW_ON;
+
         if (m.type == PKT_PENDING)
         {
             p = (radio_packet_t *) m.content.ptr;
@@ -121,5 +122,7 @@ void *radio_to_uart_thread(void *arg)
         {
             stats.radio_buffer_full += 1;
         }
+
+        LED_YELLOW_OFF;
     }
 }

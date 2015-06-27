@@ -1,3 +1,5 @@
+#include "coap.h"
+
 const coap_endpoint_path_t path_get_temp = {2, {".well-known", "core"}};
 
 int handle_get_temp(
@@ -7,5 +9,5 @@ int handle_get_temp(
     uint8_t             id_hi,
     uint8_t             id_lo
 ) {
-    return
+    return;
 }

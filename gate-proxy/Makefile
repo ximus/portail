@@ -16,6 +16,7 @@ export USE_MSPGCC = 1
 
 # Uncomment this to enable scheduler statistics for ps:
 # CFLAGS += -DSCHEDSTATISTICS
+CFLAGS += -DSCHED_TEST_STACK
 
 
 ASFLAGS += -gdwarf-2
@@ -39,11 +40,6 @@ CFLAGS += -DDEVELHELP
 # Change this to 0 show compiler invocation lines by default:
 export QUIET ?= 0
 
-# most of these aren't actually disabled as they are not in DEFAULT_MODULES
-DISABLE_MODULE += oneway_malloc
-DISABLE_MODULE += protocol_multiplex
-DISABLE_MODULE += net_help
-
 # Modules to include:
 USEMODULE += shell
 USEMODULE += shell_commands
@@ -63,6 +59,9 @@ USEMODULE += auto_init
 
 DIRS 			+= api
 USEMODULE += api
+
+DIRS 			+= api/endpoints
+USEMODULE += endpoints
 
 DIRS 			+= $(CURDIR)/../shared
 INCLUDES  += -I$(CURDIR)/../shared

@@ -10,9 +10,7 @@
 
 int main(void)
 {
-    vtimer_init();
     laser_init();
-    uart_init();
 
     // restore any existing persisted state
     restore_state();

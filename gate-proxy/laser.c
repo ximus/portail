@@ -7,7 +7,7 @@
 
 // The duration of each pulse (corresponding to a push button “click”),
 // and the period between multiple pulses, are defined as “T”: 0.04 seconds ≤ T ≤ 0.8 seconds.
-#define LASER_PERIOD_TICKS  ((unsigned long) 0.05*F_CPU)
+#define LASER_PERIOD_TICKS  ((unsigned long) 5*F_CPU/100) /* F_CPU * 5% */
 
 // Selected Response Speed
 // Laser Enable Time

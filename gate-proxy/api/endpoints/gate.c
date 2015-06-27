@@ -1,3 +1,4 @@
+#include "coap.h"
 #include "cbor.h"
 #include "portail.h"
 #include "gate_control.h"
@@ -8,11 +9,9 @@
 #define REQUEST_CLOSE (-1)
 
 /* response fields */
-#define STATE_FIELD    "f"
+#define STATE_FIELD    "s"
 #define ERROR_FIELD    "e"
 #define POSITION_FIELD "p"
-
-const coap_endpoint_path_t path_gate = {1, {"gate"}};
 
 static uint8_t resp_buffer[PORTAIL_MAX_DATA_SIZE];
 cbor_stream_t cbor;
@@ -29,7 +28,7 @@ int handle_get_gate(
     // cbor_clear(&cbor);
     cbor_init(&cbor, resp_buffer, sizeof(resp_buffer));
 
-    length += cbor_serialize_map(&cbor, 2);
+    length += cbor_serialize_map_indefinite(&cbor);
 
     /* state */
     length += cbor_serialize_byte_string(&cbor, STATE_FIELD);
@@ -41,6 +40,8 @@ int handle_get_gate(
         length += cbor_serialize_byte_string(&cbor, POSITION_FIELD);
         length += cbor_serialize_int(&cbor, position);
     }
+
+    length += cbor_write_break(&cbor);
 
     return coap_make_response(
         scratch,
@@ -102,11 +103,11 @@ int handle_put_gate(
 
     length += cbor_serialize_map(&cbor, 2);
     length += cbor_serialize_byte_string(&cbor, STATE_FIELD);
-    length += cbor_serialize_byte_string(&cbor, gate_get_state());
+    length += cbor_serialize_int(&cbor, gate_get_state());
 
     if (err != 0) {
         length += cbor_serialize_byte_string(&cbor, ERROR_FIELD);
-        length += cbor_serialize_byte_string(&cbor, err * -1);
+        length += cbor_serialize_int(&cbor, err * -1);
     }
 
     return coap_make_response(

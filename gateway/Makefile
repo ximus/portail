@@ -38,7 +38,6 @@ CFLAGS += -DDEVELHELP
 export QUIET ?= 0
 
 # Modules to include:
-# DISABLE_MODULE += vtimer
 
 USEMODULE += posix
 USEMODULE += transceiver
