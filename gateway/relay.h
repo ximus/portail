@@ -6,4 +6,4 @@ enum relay_msg_t {
   RELAY_PKT
 };
 
-void relay_start(void);
+int relay_start(void);

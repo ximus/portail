@@ -14,7 +14,7 @@
 #define POSITION_FIELD "p"
 
 static uint8_t resp_buffer[PORTAIL_MAX_DATA_SIZE];
-cbor_stream_t cbor;
+static cbor_stream_t cbor;
 
 
 int handle_get_gate(
