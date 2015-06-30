@@ -2,10 +2,9 @@
 
 #include "leds.h"
 #include "thread.h"
-#include "hwtimer.h"
+#include "vtimer.h"
 #include "coap.h"
 #include "net_layer.h"
-#include "unistd.h"
 #include "api.h"
 #include "portail.h"
 
@@ -101,7 +100,8 @@ void *api_thread(void *arg)
     while (sock == SOCK_UNDEF) {
         sock = netl_socket(SOCK_DATA);
         DEBUG("api: cannot get socket");
-        sleep(1);
+        timex_t t = {1,0};
+        vtimer_sleep(t);
     }
 
     netl_bind(sock, API_UDP_PORT);
