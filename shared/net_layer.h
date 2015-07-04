@@ -8,7 +8,8 @@ enum {
     SOCK_DATA
 };
 
-typedef struct __attribute__((packed)) {
+typedef struct __attribute__((packed))
+{
     uint16_t src_port;                  ///< source port
     uint16_t dst_port;                  ///< destination port
     uint16_t length;                    ///< payload length
@@ -18,7 +19,8 @@ typedef struct __attribute__((packed)) {
      * @see <a href="http://tools.ietf.org/html/rfc1071">RFC 1071</a>
      */
     uint16_t checksum;
-} udp_hdr_t;
+}
+udp_hdr_t;
 
 
 void netl_init(void);

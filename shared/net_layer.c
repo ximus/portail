@@ -1,4 +1,3 @@
-#include "transceiver.h"
 #include "thread.h"
 #include "limits.h"
 #include "mutex.h"
@@ -11,36 +10,57 @@
 /* should probaby bust out a dedicated thread for this */
 
 /**
- * UDP checksums are not calculated. It's not easy as IP packets are
+ * UDP checksums are not calculated. It's not possible as IP packets are
  * terminated in the xport and the checksum is based on IP headers.
  * Checksum is checked at IP termination, then all other transports
  * (UART and radio) have their own CRC checks.
  */
 
-#define TRANCSCEIVER TRANSCEIVER_DEFAULT
 #define MAX_SOCKETS (3)
 
-typedef struct {
+typedef struct
+{
     int id;
     uint type;
     uint port;
     kernel_pid_t dest_pid;
-} sock_t;
+}
+sock_t;
 
 static sock_t sockets[MAX_SOCKETS];
 static uint socket_nextid = 0;
 static uint next_rand_port = UINT_MAX;
 
-static struct {
+typedef struct __attribute__((packed))
+{
+    uint8_t processing;             ///< internal processing state
+    radio_packet_length_t length;   ///< Length of payload
+    uint8_t *data;                  ///< Payload
+}
+radio_pkt_t;
+
+static struct
+{
   uint radio_buffer_full;
   uint radio_send_fail;
   uint unhandled_packet;
-} stats;
+  uint out_of_buffer;
+}
+stats;
+
+/**
+ * cc110x drivers and transceiver a so tightly coupled that transceiver.h
+ * and radio/types.h cannot be avoided.
+ */
+#define PKT_BUF_SIZE (3)
+static radio_pkt_t pkt_buffer[PKT_BUF_SIZE];
+static uint8_t data_buffer[PKT_BUF_SIZE * PAYLOAD_SIZE];
+static volatile uint8_t pkt_buffer_pos = 0;
 
 kernel_pid_t net_layer_pid = KERNEL_PID_UNDEF;
 
 
-#define ENABLE_DEBUG    (1)
+#define ENABLE_DEBUG    (0)
 #include "debug.h"
 
 static sock_t *new_socket(void)
@@ -178,7 +198,7 @@ int netl_recv(int s, uint8_t *dest, uint maxlen, uint *srcport)
 
         if (m.sender_pid == net_layer_pid)
         {
-            radio_packet_t *pkt = (radio_packet_t *) m.content.ptr;
+            radio_pkt_t *pkt = (radio_pkt_t *) m.content.ptr;
             udp_hdr_t *udph = (udp_hdr_t *) pkt->data;
             char *data;
             uint length;
@@ -211,25 +231,16 @@ int netl_recv(int s, uint8_t *dest, uint maxlen, uint *srcport)
 
 static uint8_t _netl_send(sock_t *sock, uint8_t *data, uint8_t size)
 {
+    static cc110x_packet_t cc110x_pkt;
 
-    static radio_packet_t radio_pkt;
-    static transceiver_command_t tcmd;
+    cc110x_pkt.length = size + CC1100_HEADER_LENGTH;
+    cc110x_pkt.address = CC1100_BROADCAST_ADDRESS;
+    cc110x_pkt.flags = 0;
+    memcpy(cc110x_pkt.data, data, size);
 
-    radio_pkt.dst = TRANSCEIVER_BROADCAST;
-    radio_pkt.data = data;
-    radio_pkt.length = size;
+    int8_t sent_len = cc110x_send(&cc110x_pkt);
 
-    tcmd.transceivers = TRANCSCEIVER;
-    tcmd.data = &radio_pkt;
-
-    msg_t m;
-    m.type = SND_PKT;
-    m.content.ptr = (char *) &tcmd;
-    msg_send_receive(&m, &m, transceiver_pid);
-
-    // cc110x_send() returns int8_t
-    int8_t sent_len = (int8_t) m.content.value;
-    if (sent_len <= 0){
+    if (sent_len <= 0) {
         stats.radio_send_fail += 1;
     }
 
@@ -290,59 +301,102 @@ int netl_send(int s, uint8_t *data, uint8_t size)
     return _netl_send(sock, data, size);
 }
 
+/**
+ * @return  0 or -1 on out of buffer
+ */
+static int8_t incr_pkt_buffer_pos(void)
+{
+    uint8_t i;
+    for (i = 0; (i < PKT_BUF_SIZE) && (pkt_buffer[pkt_buffer_pos].processing); i++) {
+        if (++pkt_buffer_pos == PKT_BUF_SIZE) {
+            pkt_buffer_pos = 0;
+        }
+    }
+    if (i >= PKT_BUF_SIZE) {
+        return -1;
+    }
+    return 0;
+}
+
+static void handle_radio_packet(radio_pkt_t *pkt)
+{
+    msg_t m;
+
+    bool pkt_handled = false;
+    udp_hdr_t *udph = (udp_hdr_t *) pkt->data;
+
+    /* for all sockets */
+    for (int i = 0; i < MAX_SOCKETS; ++i)
+    {
+        sock_t *sock = &sockets[i];
+
+        /* if has a pid registered */
+        if (sock->dest_pid != KERNEL_PID_UNDEF)
+        {
+            bool has_matching_port = sock->port && sock->port == NTOHS(udph->dst_port);
+            bool has_no_port_but_is_raw = !sock->port && sock->type == SOCK_RAW;
+
+            /* if socket should receive the msg */
+            if (has_matching_port || has_no_port_but_is_raw)
+            {
+                m.content.ptr = (void *) pkt;
+                int ret = msg_try_send(&m, sock->dest_pid);
+                if (ret == 1) {
+                    /* successfully delivered, netl_recv will have to decr this */
+                    pkt_handled = true;
+                }
+            }
+        }
+    }
+    if (!pkt_handled)
+    {
+        DEBUG("net_layer: radio packet dropped");
+        stats.unhandled_packet += 1;
+    }
+}
+
+static void receive_cc110x_packet(radio_pkt_t *trans_p, uint8_t rx_buffer_pos)
+{
+    DEBUG("net_layer: Handling CC1100 packet\n");
+    /* disable interrupts while copying packet */
+    dINT();
+    cc110x_packet_t *p = &cc110x_rx_buffer[rx_buffer_pos].packet;
+
+    trans_p->length = p->length - CC1100_HEADER_LENGTH;
+    trans_p->data = &data_buffer[pkt_buffer_pos * CC1100_MAX_DATA_LENGTH];
+    memcpy(trans_p->data, p->data, CC1100_MAX_DATA_LENGTH);
+    eINT();
+
+    DEBUG("net_layer: Packet %p (%p) was from %hu to %hu, size: %u\n", trans_p, trans_p->data, trans_p->src, trans_p->dst, trans_p->length);
+}
+
+#define MSG_BUFFER_SIZE (8)
+static msg_t msg_buffer[MSG_BUFFER_SIZE];
 
 static void *rx_thread(void *arg)
 {
-    transceiver_init(TRANCSCEIVER);
-    transceiver_start();
-    transceiver_register(TRANCSCEIVER, thread_getpid());
+    msg_t m;
 
-    msg_t m, target_m;
+    msg_init_queue(msg_buffer, MSG_BUFFER_SIZE);
 
     while(1)
     {
         msg_receive(&m);
 
-        if (m.type == PKT_PENDING)
+        if (m.type == RCV_PKT_CC1100)
         {
-            bool pkt_handled = false;
-            radio_packet_t *pkt = (radio_packet_t *) m.content.ptr;
-            udp_hdr_t *udph = (udp_hdr_t *) pkt->data;
-
-            /* for all sockets */
-            for (int i = 0; i < MAX_SOCKETS; ++i)
+            int err = incr_pkt_buffer_pos();
+            if (!err)
             {
-                sock_t *sock = &sockets[i];
+                uint8_t pos = m.content.value;
+                radio_pkt_t *pkt = &pkt_buffer[pkt_buffer_pos];
 
-                /* if has a pid registered */
-                if (sock->dest_pid != KERNEL_PID_UNDEF)
-                {
-                    bool has_matching_port = sock->port && sock->port == NTOHS(udph->dst_port);
-                    bool has_no_port_but_is_raw = !sock->port && sock->type == SOCK_RAW;
-
-                    /* if should receive UDP msg */
-                    if (has_matching_port || has_no_port_but_is_raw)
-                    {
-                        target_m = m;
-                        int ret = msg_try_send(&target_m, sock->dest_pid);
-                        if (ret == 1) {
-                            /* successfully delivered, netl_recv will have to decr this */
-                            pkt->processing++;
-                            pkt_handled = true;
-                        }
-                    }
-                }
+                receive_cc110x_packet(pkt, pos);
+                handle_radio_packet(pkt);
             }
-            if (!pkt_handled)
-            {
-                DEBUG("net_layer: radio packet dropped, lacked listening socket");
-                stats.unhandled_packet += 1;
+            else {
+                stats.radio_buffer_full += 1;
             }
-            pkt->processing--;
-        }
-        else if (m.type == ENOBUFFER)
-        {
-            stats.radio_buffer_full += 1;
         }
     }
     UNREACHABLE();
@@ -375,4 +429,6 @@ void netl_init(void)
           "net_layer"
         );
     }
+
+    cc110x_init(net_layer_pid);
 }

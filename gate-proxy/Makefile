@@ -49,7 +49,6 @@ USEMODULE += ps
 USEMODULE += vtimer
 USEMODULE += cc110x_legacy
 USEMODULE += cbor
-USEMODULE += transceiver
 USEMODULE += auto_init
 # USEMODULE += config
 

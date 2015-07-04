@@ -40,7 +40,6 @@ export QUIET ?= 0
 # Modules to include:
 
 USEMODULE += posix
-USEMODULE += transceiver
 USEMODULE += cc110x_legacy
 USEMODULE += vtimer
 USEMODULE += auto_init
