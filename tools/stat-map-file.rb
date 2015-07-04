@@ -1,9 +1,15 @@
+#!/usr/bin/env ruby
+
 require 'csv'
 require 'pry'
 require 'terminal-table'
 
 path = ARGV[0]
-path && path.size > 0 or raise("usage: stat-map-file.rb [path]")
+if !path || path.size == 0
+  puts("usage: stat-map-file.rb [path]")
+  exit(1)
+end
+
 lines = File.read(path).split("\n")
 
 bss_items_header = ['id', 'size', 'path']
