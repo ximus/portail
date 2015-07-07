@@ -34,6 +34,7 @@ static uint next_rand_port = UINT_MAX;
 typedef struct __attribute__((packed))
 {
     uint8_t processing;             ///< internal processing state
+    uint8_t rssi;                   ///< Radio Signal Strength Indication
     radio_packet_length_t length;   ///< Length of payload
     uint8_t *data;                  ///< Payload
 }
@@ -183,7 +184,7 @@ int netl_close(int s)
     return 0;
 }
 
-int netl_recv(int s, uint8_t *dest, uint maxlen, uint *srcport)
+int netl_recv(int s, uint8_t *dest, uint maxlen, frominfo_t *info)
 {
     sock_t *sock = get_socket(s);
 
@@ -216,8 +217,9 @@ int netl_recv(int s, uint8_t *dest, uint maxlen, uint *srcport)
             if (length <= maxlen)
             {
                 memcpy(dest, data, length);
-                if (srcport != NULL) {
-                    *srcport = udph->src_port;
+                if (info != NULL) {
+                    info->src_port = udph->src_port;
+                    info->rssi = pkt->rssi;
                 }
                 return length;
             }
@@ -362,6 +364,7 @@ static void receive_cc110x_packet(radio_pkt_t *trans_p, uint8_t rx_buffer_pos)
     dINT();
     cc110x_packet_t *p = &cc110x_rx_buffer[rx_buffer_pos].packet;
 
+    trans_p->rssi = cc110x_rx_buffer[rx_buffer_pos].rssi;
     trans_p->length = p->length - CC1100_HEADER_LENGTH;
     trans_p->data = &data_buffer[pkt_buffer_pos * CC1100_MAX_DATA_LENGTH];
     memcpy(trans_p->data, p->data, CC1100_MAX_DATA_LENGTH);

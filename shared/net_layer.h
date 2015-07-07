@@ -1,6 +1,24 @@
 #ifndef NET_LAYER_H__
 #define NET_LAYER_H__
 
+
+/**
+ * net_layer: communication layer for portail nodes
+ *
+ * To reduce RAM use, both transport and link layers are handled here and RIOT's
+ * transceiver.h is not used.
+ * This assumes the network communications haapen exclusively over UDP.
+ *
+ * I finally noticed a drawback of using these posix-style network functions as
+ * opposed to simply using the RIOT msg passing interface. A thread blocked on
+ * a network read (`netl_recv`) cannot read any other msgs, `netl_recv`
+ * actully drops the msg! Should have seen that comming ... It works nicely for
+ * me so far as my network threads only wait on network and no one else.
+ */
+
+#include "stdlib.h"
+#include "stdint.h"
+
 #define SOCK_UNDEF (-1)
 
 enum {
@@ -21,6 +39,13 @@ typedef struct __attribute__((packed))
     uint16_t checksum;
 }
 udp_hdr_t;
+
+typedef struct
+{
+    uint16_t src_port;
+    uint8_t  rssi;
+}
+frominfo_t;
 
 
 void netl_init(void);
@@ -62,7 +87,7 @@ uint8_t netl_unbind(int s);
  * @param  srcport sender port
  * @return         num of bytes received or -1 on error
  */
-int netl_recv(int s, uint8_t *dest, uint maxlen, uint *srcport);
+int netl_recv(int s, uint8_t *dest, uint maxlen, frominfo_t *info);
 
 /**
  * Send a raw UDP message

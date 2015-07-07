@@ -108,18 +108,18 @@ void *api_thread(void *arg)
 
     LED_YELLOW_ON;
 
-    static char buffer[PORTAIL_MAX_DATA_SIZE];
-    uint src_port;
+    static uint8_t buffer[PORTAIL_MAX_DATA_SIZE];
+    static frominfo_t frominfo;
 
     while (1)
     {
-        int len = netl_recv(sock, buffer, sizeof(buffer), &src_port);
+        int len = netl_recv(sock, buffer, sizeof(buffer), &frominfo);
 
         if (0 < len)
         {
             LED_GREEN_ON;
 
-            handle_req(buffer, len, src_port);
+            handle_req(buffer, len, frominfo.src_port);
 
             LED_GREEN_OFF;
         }
