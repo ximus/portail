@@ -4,6 +4,8 @@
 
 #include "cc110x_legacy.h"
 
+#define THREAD_STACKSIZE_DEFAULT (196)
+
 #define GATE_PROXY_RADIO_ADDR   (1)
 #define GATEWAY_RADIO_ADDR      (2)
 
