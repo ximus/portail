@@ -7,6 +7,7 @@
 #include "gate_telemetry.h"
 #include "gate_control.h"
 #include "gate_radio.h"
+#include "net_monitor.h"
 #include "laser.h"
 #include "stdio.h"
 #include "stdlib.h"
@@ -25,6 +26,7 @@ static void telemetry_on_command(int argc, char **argv);
 static void telemetry_off_command(int argc, char **argv);
 static void gate_open_command(int argc, char **argv);
 static void gate_close_command(int argc, char **argv);
+static void radio_test_command(int argc, char **argv);
 #if LASER_STREAM
 static void laser_stream_command(int argc, char **argv);
 #endif
@@ -37,6 +39,7 @@ static const shell_command_t shell_commands[] = {
     { "telemetry_off", "", telemetry_off_command },
     { "open", "", gate_open_command },
     { "close", "", gate_close_command },
+    { "radio_test", "", radio_test_command },
     #if LASER_STREAM
     { "laser_stream", "read laser", laser_stream_command },
     #endif
@@ -70,8 +73,8 @@ static inline void wait_for_enter_key(void)
     (void) readline(NULL, 0);
 }
 
-#define MAX_CHARS_INPUT (6)
-static char input_buffer[MAX_CHARS_INPUT];
+// #define MAX_CHARS_INPUT (6)
+// static char input_buffer[MAX_CHARS_INPUT];
 
 static void telemetry_on_command(int argc, char **argv)
 {
@@ -221,6 +224,14 @@ static void gate_close_command(int argc, char **argv)
     if (err < 0) {
         puts("error");
     }
+}
+
+static void radio_test_command(int argc, char **argv)
+{
+    netm_qual_test_start(true);
+    printf("press [Enter] to exit\n\n");
+    wait_for_enter_key();
+    netm_qual_test_stop();
 }
 
 #if LASER_STREAM

@@ -43,7 +43,7 @@ static int sock = SOCK_UNDEF;
 kernel_pid_t api_endpoint_pid = KERNEL_PID_UNDEF;
 
 
-static void handle_req(char *buffer, int length, uint dest_port)
+static void handle_req(uint8_t *buffer, int length, uint dest_port)
 {
     static coap_packet_t coap_req;
     static coap_packet_t coap_resp;

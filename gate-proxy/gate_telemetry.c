@@ -8,6 +8,7 @@
 #include "stdlib.h"
 #include "errors.h"
 #include "gate_radio.h"
+#include "portail.h"
 
 #define ENABLE_DEBUG    (1)
 #include "debug.h"

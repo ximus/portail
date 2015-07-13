@@ -2,6 +2,8 @@
 #include "gate_telemetry.h"
 #include "persistence.h"
 #include "laser.h"
+#include "net_layer.h"
+#include "net_monitor.h"
 #include "api/api.h"
 
 // TODO: add radio transport security?
@@ -15,6 +17,9 @@ int main(void)
     // restore any existing persisted state
     restore_state();
 
+    netl_init();
+
+    netm_start();
     api_start();
     app_shell_run();
     // TODO: set led if teaching needed
