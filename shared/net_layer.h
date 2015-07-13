@@ -14,10 +14,15 @@
  * a network read (`netl_recv`) cannot read any other msgs, `netl_recv`
  * actully drops the msg! Should have seen that comming ... It works nicely for
  * me so far as my network threads only wait on network and no one else.
+ * Update: I've fixed this by introducting NETL_RCV_MSG_TYPE. It doesn't fit too
+ * well with the socket id concept I borrowed from posix but works for now.
  */
 
 #include "stdlib.h"
 #include "stdint.h"
+
+
+#define NETL_RCV_MSG_TYPE  (0x4033) /* chosen randomly */
 
 #define SOCK_UNDEF (-1)
 
@@ -106,5 +111,6 @@ int netl_send(int sock, uint8_t *data, uint8_t size);
  * @return      sent length or -1 on error
  */
 int netl_send_to(int s, uint8_t *data, uint8_t size, uint dstport);
+
 
 #endif /* end of include guard: NET_LAYER_H__ */

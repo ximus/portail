@@ -1,13 +1,13 @@
 #include "thread.h"
 #include "limits.h"
 #include "mutex.h"
+#include "irq.h"
+#include "utlist.h"
 #include "byteorder.h"
 #include "crc.h"
 #include "net_layer.h"
 #include "string.h"
 #include "portail.h"
-
-/* should probaby bust out a dedicated thread for this */
 
 /**
  * UDP checksums are not calculated. It's not possible as IP packets are
@@ -16,29 +16,34 @@
  * (UART and radio) have their own CRC checks.
  */
 
+
+typedef struct radio_pkt_t
+{
+    uint8_t users;                  ///< number of threads still processing it
+    struct radio_pkt_t *rcv_queue_next;
+    uint8_t rssi;                   ///< Radio Signal Strength Indication
+    radio_packet_length_t length;   ///< Length of payload
+    uint8_t *data;                  ///< Payload
+}
+radio_pkt_t;
+
+
 #define MAX_SOCKETS (3)
 
 typedef struct
 {
     int id;
+    bool blocking;
     uint type;
     uint port;
     kernel_pid_t dest_pid;
+    radio_pkt_t *rcv_queue;
 }
 sock_t;
 
 static sock_t sockets[MAX_SOCKETS];
 static uint socket_nextid = 0;
 static uint next_rand_port = UINT_MAX;
-
-typedef struct __attribute__((packed))
-{
-    uint8_t processing;             ///< internal processing state
-    uint8_t rssi;                   ///< Radio Signal Strength Indication
-    radio_packet_length_t length;   ///< Length of payload
-    uint8_t *data;                  ///< Payload
-}
-radio_pkt_t;
 
 static struct
 {
@@ -50,13 +55,19 @@ static struct
 stats;
 
 /**
- * cc110x drivers and transceiver a so tightly coupled that transceiver.h
+ * cc110x drivers and transceiver are so tightly coupled that transceiver.h
  * and radio/types.h cannot be avoided.
  */
-#define PKT_BUF_SIZE (3)
-static radio_pkt_t pkt_buffer[PKT_BUF_SIZE];
-static uint8_t data_buffer[PKT_BUF_SIZE * PAYLOAD_SIZE];
-static volatile uint8_t pkt_buffer_pos = 0;
+
+#define RCV_BUF_SIZE (3)
+/**
+ * all three are linked and accessed using the same index `rcv_buffer_pos`.
+ * freedom determined using `users` property of netl_rcv_t
+ */
+static radio_pkt_t    pkt_rcv_buffer[RCV_BUF_SIZE];
+static uint8_t        data_buffer[RCV_BUF_SIZE * CC1100_MAX_DATA_LENGTH];
+// static netl_rcv_msg_t rvc_msg_buffer[RCV_BUF_SIZE];
+static volatile uint8_t rcv_buffer_pos = 0;
 
 kernel_pid_t net_layer_pid = KERNEL_PID_UNDEF;
 
@@ -72,6 +83,8 @@ static sock_t *new_socket(void)
         {
             sock_t *sock = &sockets[i];
             sock->id = socket_nextid++;
+            sock->blocking = true;
+            sock->rcv_queue = NULL;
             return sock;
         }
     }
@@ -111,11 +124,30 @@ static uint get_rand_port(void)
     return next_rand_port--;
 }
 
-bool sock_is_bound(sock_t *sock)
+static bool sock_is_bound(sock_t *sock)
 {
     return sock->port && sock->dest_pid != KERNEL_PID_UNDEF;
 }
 
+static void rcv_queue_add(sock_t *sock, radio_pkt_t *pkt)
+{
+    LL_APPEND2(sock->rcv_queue, pkt, rcv_queue_next);
+}
+
+static radio_pkt_t *rcv_queue_pop(sock_t *sock)
+{
+    unsigned irq_state = disableIRQ();
+
+    radio_pkt_t *pkt = sock->rcv_queue;
+    if (pkt != NULL)
+    {
+        LL_DELETE2(sock->rcv_queue, pkt, rcv_queue_next);
+    }
+
+    restoreIRQ(irq_state);
+
+    return pkt;
+}
 
 int netl_socket(uint type)
 {
@@ -192,43 +224,60 @@ int netl_recv(int s, uint8_t *dest, uint maxlen, frominfo_t *info)
         return -1;
     }
 
-    msg_t m;
+    radio_pkt_t *pkt = rcv_queue_pop(sock);
 
-    while (1) {
-        msg_receive(&m);
-
-        if (m.sender_pid == net_layer_pid)
+    if (pkt == NULL)
+    {
+        if (sock->blocking)
         {
-            radio_pkt_t *pkt = (radio_pkt_t *) m.content.ptr;
-            udp_hdr_t *udph = (udp_hdr_t *) pkt->data;
-            char *data;
-            uint length;
+            msg_t m;
 
-            if (sock->type == SOCK_RAW)
-            {
-                length = pkt->length;
-                data = (char *) pkt->data;
-            }
-            else {
-                length = udph->length;
-                data = (char *) udph + sizeof(udp_hdr_t);
-            }
+            while (1) {
+                msg_receive(&m);
 
-            if (length <= maxlen)
-            {
-                memcpy(dest, data, length);
-                if (info != NULL) {
-                    info->src_port = udph->src_port;
-                    info->rssi = pkt->rssi;
+                if (m.type != NETL_RCV_MSG_TYPE) {
+                    continue;
                 }
-                return length;
-            }
-            pkt->processing--;
+
+                if (sock->id != m.content.value) {
+                    continue;
+                }
+
+                pkt = rcv_queue_pop(sock);
+                break;
+             }
         }
-        /* else drop your msg, not ideal */
+        else {
+            return 0;
+        }
     }
 
-    UNREACHABLE();
+    udp_hdr_t *udph = (udp_hdr_t *) pkt->data;
+    char *data;
+    uint length;
+
+    if (sock->type == SOCK_RAW)
+    {
+        length = pkt->length;
+        data = (char *) pkt->data;
+    }
+    else {
+        length = udph->length;
+        data = (char *) udph + sizeof(udp_hdr_t);
+    }
+
+    if (length <= maxlen)
+    {
+        memcpy(dest, data, length);
+        if (info != NULL) {
+            info->src_port = udph->src_port;
+            info->rssi = pkt->rssi;
+        }
+        return length;
+    }
+    pkt->users--;
+
+    return 0;
 }
 
 static uint8_t _netl_send(sock_t *sock, uint8_t *data, uint8_t size)
@@ -303,18 +352,34 @@ int netl_send(int s, uint8_t *data, uint8_t size)
     return _netl_send(sock, data, size);
 }
 
+int netl_set_nonblock(int s)
+{
+    sock_t *sock = get_socket(s);
+
+    if (sock == NULL) {
+        return -1;
+    }
+
+    sock->blocking = false;
+
+    return 0;
+}
+
 /**
  * @return  0 or -1 on out of buffer
  */
-static int8_t incr_pkt_buffer_pos(void)
+static int8_t incr_rcv_buffer_pos(void)
 {
     uint8_t i;
-    for (i = 0; (i < PKT_BUF_SIZE) && (pkt_buffer[pkt_buffer_pos].processing); i++) {
-        if (++pkt_buffer_pos == PKT_BUF_SIZE) {
-            pkt_buffer_pos = 0;
+    for (i = 0;
+         i < RCV_BUF_SIZE && pkt_rcv_buffer[rcv_buffer_pos].users;
+         i++)
+    {
+        if (++rcv_buffer_pos == RCV_BUF_SIZE) {
+            rcv_buffer_pos = 0;
         }
     }
-    if (i >= PKT_BUF_SIZE) {
+    if (i >= RCV_BUF_SIZE) {
         return -1;
     }
     return 0;
@@ -341,10 +406,15 @@ static void handle_radio_packet(radio_pkt_t *pkt)
             /* if socket should receive the msg */
             if (has_matching_port || has_no_port_but_is_raw)
             {
-                m.content.ptr = (void *) pkt;
+                m.type = NETL_RCV_MSG_TYPE;
+                m.content.value = sock->id;
+
                 int ret = msg_try_send(&m, sock->dest_pid);
                 if (ret == 1) {
                     /* successfully delivered, netl_recv will have to decr this */
+
+                    pkt->users += 1;
+                    rcv_queue_add(sock, pkt);
                     pkt_handled = true;
                 }
             }
@@ -366,7 +436,7 @@ static void receive_cc110x_packet(radio_pkt_t *trans_p, uint8_t rx_buffer_pos)
 
     trans_p->rssi = cc110x_rx_buffer[rx_buffer_pos].rssi;
     trans_p->length = p->length - CC1100_HEADER_LENGTH;
-    trans_p->data = &data_buffer[pkt_buffer_pos * CC1100_MAX_DATA_LENGTH];
+    trans_p->data = &data_buffer[rcv_buffer_pos * CC1100_MAX_DATA_LENGTH];
     memcpy(trans_p->data, p->data, CC1100_MAX_DATA_LENGTH);
     eINT();
 
@@ -386,18 +456,19 @@ static void *rx_thread(void *arg)
     {
         msg_receive(&m);
 
-        if (m.type == RCV_PKT_CC1100)
+        if (m.type == CC1100_PKT_RCV_MSG_TYPE)
         {
-            int err = incr_pkt_buffer_pos();
+            int err = incr_rcv_buffer_pos();
             if (!err)
             {
                 uint8_t pos = m.content.value;
-                radio_pkt_t *pkt = &pkt_buffer[pkt_buffer_pos];
+                radio_pkt_t *pkt = &pkt_rcv_buffer[rcv_buffer_pos];
 
                 receive_cc110x_packet(pkt, pos);
                 handle_radio_packet(pkt);
             }
             else {
+                DEBUG("net_layer: receive buffer full, packet dropped");
                 stats.radio_buffer_full += 1;
             }
         }
